@@ -5,5 +5,6 @@
 Made with Claude 3.7
 
 ## Space Debris
-Made with Claude 3.7
+Code made with Claude 3.7
 Music made with Suno v3.5
+SFX made with https://sfxr.me/
