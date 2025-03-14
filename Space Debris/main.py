@@ -13,10 +13,17 @@ mixer.init()
 # Load music files from data folder
 bg_gameplay_music = mixer.Sound(os.path.join('data', 'bg-music.mp3'))
 bg_menu_music = mixer.Sound(os.path.join('data', 'bg-menu-music.mp3'))
+s_1 = mixer.Sound(os.path.join('data', "med bomb.wav"))
+s_2 = mixer.Sound(os.path.join('data', "big bomb.wav"))
+s_3 = mixer.Sound(os.path.join('data', "space_expl.wav"))
+s_4 = mixer.Sound(os.path.join('data', "rotate2.wav"))
 
 # Set volumes (adjust as needed)
-bg_gameplay_music.set_volume(0.5)
-bg_menu_music.set_volume(0.5)
+bg_gameplay_music.set_volume(0.6)
+bg_menu_music.set_volume(0.6)
+s_1.set_volume(0.8)
+s_2.set_volume(1.2)
+
 
 # Variables to track music state
 current_music = None
@@ -743,6 +750,9 @@ class Player:
         """Reduce player health and check if destroyed"""
         self.health -= amount
         
+        # Play sound
+        s_2.play()
+        
         # Visual feedback - create damage particles
         explosion_particles.extend(create_particles(
             self.x, self.y, (255, 100, 0), 
@@ -755,6 +765,8 @@ class Player:
         
         if self.health <= 0:
             self.health = 0
+            # Play sound
+            s_3.play()
             # Big explosion on death
             explosion_particles.extend(create_particles(
                 self.x, self.y, (255, 200, 0), 
@@ -779,6 +791,8 @@ class Player:
     def throw_net(self, angle, power):
         """Create and throw a new net if none is active"""
         if self.net is None or (self.net and not self.net.active):
+            # Play sound
+            s_4.play()
             self.net = Net(self.x, self.y, angle, power)
             return self.net
         return None
@@ -818,6 +832,8 @@ class Satellite:
     def destroy(self):
         """Mark the satellite as destroyed"""
         self.alive = False
+        # Play sound
+        s_1.play()
         # Create explosion particles
         explosion_particles.extend(create_particles(
             self.x, self.y, (255, 150, 0), 
