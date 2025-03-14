@@ -826,10 +826,9 @@ class Satellite:
 
 class Debris:
     """Space debris that threatens the player and satellites"""
-    def __init__(self, y, speed, debris_type):
-        self.x = -30  # Start off-screen
-        self.y = y
-        self.speed = speed
+    def __init__(self, spawn_x, spawn_y, target_x, target_y, debris_type):
+        self.x = spawn_x
+        self.y = spawn_y
         self.type = debris_type
         self.image = load_image(debris_type, (30, 30))
         self.rect = self.image.get_rect(center=(self.x, self.y))
@@ -837,7 +836,7 @@ class Debris:
         self.rotation = random.randint(0, 360)
         self.rotation_speed = random.uniform(1, 3) * (1 if random.random() > 0.5 else -1)
         
-        # Different debris types have different point values and damage
+        # Aseta pistearvot ja vaurius debris-tyypin mukaan
         if debris_type == "asteroid":
             self.value = 20
             self.damage = 15
@@ -850,41 +849,44 @@ class Debris:
             self.value = 10
             self.damage = 10
             self.trail_color = (100, 200, 255)
-            
-        # Each debris has its own trail particles
+        
+        # Lasketaan suunta kohteeseen ja asetetaan nopeus
+        dx = target_x - spawn_x
+        dy = target_y - spawn_y
+        distance = math.hypot(dx, dy)
+        # Valitaan satunnaisesti nopeus debris-tyypin mukaisesti
+        speed = random.uniform(DEBRIS_SPEED_MIN, DEBRIS_SPEED_MAX)
+        self.vx = (dx / distance) * speed
+        self.vy = (dy / distance) * speed
+        
         self.trail_particles = []
-
+    
     def update(self):
         """Move the debris and check if it's off-screen"""
         if not self.caught:
-            self.x += self.speed
-            self.rect.centerx = self.x
-            
-            # Update rotation
+            self.x += self.vx
+            self.y += self.vy
+            self.rect.center = (self.x, self.y)
             self.rotation += self.rotation_speed
             if self.rotation >= 360:
-                self.rotation = 0
-                
-            # Create trail particles based on debris type
+                self.rotation -= 360
+            # Luodaan trail-partikkeleita
             if random.random() < 0.2:
                 self.trail_particles.extend(create_particles(
                     self.x - 5, self.y, self.trail_color, 
                     2, (0.1, 0.3), (1, 2), (0.3, 0.7)
                 ))
-                
-            # Update trail particles
             update_particles(self.trail_particles)
-            
-            return self.x > SCREEN_WIDTH
+            # Jos debris on liian kaukana ruudusta, merkitään poistettavaksi
+            if (self.x < -50 or self.x > SCREEN_WIDTH + 50 or 
+                self.y < -50 or self.y > SCREEN_HEIGHT + 50):
+                return True
         return False
 
     def draw(self, surface):
         """Draw the debris if not caught"""
         if not self.caught:
-            # Draw trail particles
             draw_particles(surface, self.trail_particles)
-            
-            # Draw rotated debris
             rotated_image = pygame.transform.rotate(self.image, self.rotation)
             new_rect = rotated_image.get_rect(center=self.rect.center)
             surface.blit(rotated_image, new_rect)
@@ -1037,94 +1039,35 @@ class Net:
 class PowerMeter:
     """Power meter for determining net throw strength"""
     def __init__(self):
-        self.width = 200
-        self.height = 20
-        self.x = SCREEN_WIDTH - self.width - 20
-        self.y = 20
         self.power = 0
-        self.increasing = True
-        self.active = False
-        self.oscillation_speed = 0.05
-        self.indicator_width = 5
+        self.charge_speed = 0.03
         self.glow_effect = 0
         self.glow_increasing = True
 
-    def update(self):
-        """Update power level if active"""
-        if self.active:
-            if self.increasing:
-                self.power += self.oscillation_speed
-                if self.power >= 1:
-                    self.power = 1
-                    self.increasing = False
-            else:
-                self.power -= self.oscillation_speed
-                if self.power <= 0:
-                    self.power = 0
-                    self.increasing = True
-                    
-            # Update glow effect
-            if self.glow_increasing:
-                self.glow_effect += 0.05
-                if self.glow_effect >= 1:
-                    self.glow_increasing = False
-            else:
-                self.glow_effect -= 0.05
-                if self.glow_effect <= 0:
-                    self.glow_increasing = True
-
-    def draw(self, surface):
-        """Draw the power meter with gradient and moving indicator"""
-        if self.active:
-            # Draw glow under meter
-            glow_surf = pygame.Surface((self.width + 20, self.height + 20), pygame.SRCALPHA)
-            glow_intensity = int(50 + 30 * self.glow_effect)
-            pygame.draw.rect(glow_surf, (255, 200, 0, glow_intensity), 
-                            (10, 10, self.width, self.height), border_radius=5)
-            surface.blit(glow_surf, (self.x - 10, self.y - 10))
-            
-            # Draw meter background with better gradient
-            for i in range(self.width):
-                ratio = i / self.width
-                # Create a smoother color gradient
-                if ratio < 0.3:
-                    # Green to yellow
-                    r = int(255 * (ratio / 0.3))
-                    g = 255
-                    b = 0
-                else:
-                    # Yellow to red
-                    r = 255
-                    g = int(255 * (1 - ((ratio - 0.3) / 0.7)))
-                    b = 0
-                
-                pygame.draw.line(surface, (r, g, b), (self.x + i, self.y), (self.x + i, self.y + self.height))
-            
-            # Draw frame with rounded corners
-            pygame.draw.rect(surface, WHITE, (self.x, self.y, self.width, self.height), 2, border_radius=5)
-            
-            # Draw indicator with glow
-            indicator_x = self.x + int(self.power * self.width) - self.indicator_width // 2
-            
-            # Indicator glow
-            indicator_glow = pygame.Surface((self.indicator_width + 10, self.height + 20), pygame.SRCALPHA)
-            glow_alpha = int(100 + 50 * self.glow_effect)
-            pygame.draw.rect(indicator_glow, (255, 255, 255, glow_alpha), 
-                            (5, 10, self.indicator_width, self.height), border_radius=2)
-            surface.blit(indicator_glow, (indicator_x - 5, self.y - 10))
-            
-            # Actual indicator
-            pygame.draw.rect(surface, WHITE, (indicator_x, self.y - 5, self.indicator_width, self.height + 10), border_radius=2)
-
-    def activate(self):
-        """Activate the power meter"""
-        self.active = True
+    def reset(self):
+        """Reset power to zero"""
         self.power = 0
-        self.increasing = True
 
-    def deactivate(self):
-        """Deactivate the power meter and return the current power level"""
-        self.active = False
+    def increase(self):
+        """Increase power if not at max"""
+        if self.power < 1.0:
+            self.power += self.charge_speed
+            if self.power > 1.0:
+                self.power = 1.0  # Clamp at max
+
+    def update_glow(self):
+        """Update glow effect animation"""
+        if self.glow_increasing:
+            self.glow_effect += 0.05
+            if self.glow_effect >= 1:
+                self.glow_increasing = False
+        else:
+            self.glow_effect -= 0.05
+            if self.glow_effect <= 0:
+                self.glow_increasing = True
+
+    def get_power(self):
+        """Get the current power level"""
         return self.power
 
 class Game:
@@ -1142,11 +1085,18 @@ class Game:
         self.aiming = False
         self.aim_angle = 0
         
+        # Add mouse button tracking
+        self.mouse_down = False
+        self.power_charging = False
+        
         # Stage settings
         self.stage = 1
         self.stage_start_time = pygame.time.get_ticks()
         self.stage_paused = False
         self.repair_interface_active = False
+        
+        # Add a flag to track if initial debris has been spawned
+        self.initial_debris_spawned = False
         
         # Create satellites
         self.spawn_satellites(5)
@@ -1172,6 +1122,18 @@ class Game:
         
         # Start gameplay music
         self.switch_to_gameplay_music()
+
+    def spawn_initial_debris(self):
+        """Spawn initial debris at the start of the stage targeting the player."""
+        spawn_distance = 50  # Kiinteä etäisyys ruudun ulkopuolelta
+        spawn_x = -spawn_distance  # Spawnataan vasemmalta
+        spawn_y = random.uniform(0, SCREEN_HEIGHT)  # Satunnainen y-arvo ruudun sisällä
+        target_x = self.player.x  # Kohteena pelaaja
+        target_y = self.player.y
+        debris_type = random.choice(DEBRIS_TYPES)
+        
+        new_debris = Debris(spawn_x, spawn_y, target_x, target_y, debris_type)
+        self.debris_list.append(new_debris)
 
     def play_music(self, music_track):
         """Play a music track if it's not already playing"""
@@ -1209,29 +1171,62 @@ class Game:
         return BASE_SPAWN_RATE * (1 + (self.stage - 1) * SPAWN_RATE_INCREASE)
 
     def spawn_debris(self):
-        """Randomly spawn new debris from the left side with progressively increasing frequency"""
         if self.stage_paused:
             return
-            
+
         current_time = pygame.time.get_ticks()
-        
-        # Only try to spawn if enough time has passed
         if current_time - self.last_spawn_time > self.spawn_delay:
             self.last_spawn_time = current_time
-            
-            # Random chance to spawn debris - rate increases with stage
-            if random.random() < self.get_current_spawn_rate():
-                y = random.randint(50, SCREEN_HEIGHT - 50)
-                
-                # Slower debris is more common
-                speed_rand = random.random()
-                if speed_rand < 0.7:  # 70% chance for slower debris
-                    speed = random.uniform(DEBRIS_SPEED_MIN, DEBRIS_SPEED_MIN + 1)
-                else:  # 30% chance for faster debris
-                    speed = random.uniform(DEBRIS_SPEED_MIN + 1, DEBRIS_SPEED_MAX)
-                
-                debris_type = random.choice(DEBRIS_TYPES)
-                self.debris_list.append(Debris(y, speed, debris_type))
+            # Arvotaan 30 % kohdistettua hyökkäystä ja 70 % suoraa lentoa
+            if random.random() < 0.3 and any(sat.alive for sat in self.satellites):
+                self.spawn_targeted_debris_to_satellite()
+            else:
+                self.spawn_straight_debris()
+    
+    def spawn_targeted_debris_to_satellite(self):
+        """Spawn debris from off-screen, targeting a random alive satellite."""
+        # Valitaan kohteeksi satelliitti
+        alive_sats = [sat for sat in self.satellites if sat.alive]
+        if not alive_sats:
+            # Jos ei löydy elossa olevia satelliitteja, palataan suoraan spawn_straight_debris-funktioon
+            self.spawn_straight_debris()
+            return
+
+        target = random.choice(alive_sats)
+        target_x, target_y = target.x, target.y
+
+        spawn_distance = 50  # Kiinteä etäisyys ruudun ulkopuolelta
+
+        # Valitaan satunnaisesti spawn-tyyppi: vasen vai ylä/ala
+        if random.random() < 0.5:
+            # Vasemmalta spawn: x on ruudun ulkopuolella ja y ruudun sisällä
+            spawn_x = -spawn_distance
+            spawn_y = random.uniform(0, SCREEN_HEIGHT)
+        else:
+            # Ylhäältä tai alhaalta spawn: x tulee ensimmäisestä kolmanneksesta ja y offscreen
+            spawn_x = random.uniform(0, SCREEN_WIDTH / 3)
+            if random.random() < 0.5:
+                spawn_y = -spawn_distance  # Ylhäällä
+            else:
+                spawn_y = SCREEN_HEIGHT + spawn_distance  # Alhaalla
+
+        debris_type = random.choice(DEBRIS_TYPES)
+        new_debris = Debris(spawn_x, spawn_y, target_x, target_y, debris_type)
+        self.debris_list.append(new_debris)
+
+    def spawn_straight_debris(self):
+        """Spawn debris from off-screen on the left side, flying horizontally."""
+        spawn_distance = 50  # Kiinteä etäisyys ruudun ulkopuolelta
+        spawn_x = -spawn_distance
+        spawn_y = random.uniform(0, SCREEN_HEIGHT)
+        # Kohteena asetetaan piste ruudun oikealla puolella, y pysyy samana
+        target_x = SCREEN_WIDTH + spawn_distance
+        target_y = spawn_y
+
+        debris_type = random.choice(DEBRIS_TYPES)
+        new_debris = Debris(spawn_x, spawn_y, target_x, target_y, debris_type)
+        self.debris_list.append(new_debris)
+
 
     def update_stage_timer(self):
         """Check if stage time has elapsed"""
@@ -1259,8 +1254,14 @@ class Game:
             health_points_to_repair = min(missing_health, self.zel // REPAIR_COST_PER_HEALTH)
             
             if health_points_to_repair > 0:
+                # Calculate the exact cost for the repairs
+                repair_cost = health_points_to_repair * REPAIR_COST_PER_HEALTH
+                
+                # Perform repairs
                 self.player.repair(health_points_to_repair)
-                self.zel = 0  # Use all ZEL for repairs
+                
+                # Only deduct the amount needed for repairs
+                self.zel -= repair_cost
 
     def continue_to_next_stage(self):
         """Move to the next stage"""
@@ -1280,10 +1281,14 @@ class Game:
         self.repair_interface_active = False
         self.stage_start_time = pygame.time.get_ticks()
         
+        # Reset the initial debris spawned flag
+        self.initial_debris_spawned = False
+        
         # Reset aiming state, power meter, and player's net
         self.aiming = False
-        if self.power_meter.active:
-            self.power_meter.deactivate()
+        self.power_charging = False
+        self.mouse_down = False
+        self.power_meter.reset()
         self.player.net = None
         
         # Always regenerate all satellites at the start of each new stage
@@ -1321,24 +1326,43 @@ class Game:
                     if hasattr(self, 'continue_button_rect') and self.continue_button_rect.collidepoint(mouse_x, mouse_y):
                         self.continue_to_next_stage()
                 continue
-                
+            
+            # Handle mouse events for click and hold power meter
             if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:  # Left mouse button
-                    if not self.aiming and self.player.net is None:  # Modified to only allow firing if no net is active
-                        # Start aiming
-                        self.aiming = True
-                        self.power_meter.activate()
-                    elif self.aiming:
-                        # Throw the net
-                        power = self.power_meter.deactivate()
-                        self.player.throw_net(self.aim_angle, power)
-                        self.aiming = False
+                if event.button == 1 and not self.aiming and self.player.net is None:  # Left mouse button
+                    # Start aiming and charging power
+                    mouse_x, mouse_y = pygame.mouse.get_pos()
+                    dx = mouse_x - self.player.x
+                    dy = mouse_y - self.player.y
+                    self.aim_angle = math.atan2(dy, dx)
+                    self.aiming = True
+                    self.mouse_down = True
+                    self.power_charging = True
+                    self.power_meter.reset()  # Reset power to 0
+            
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1 and self.aiming:  # Left mouse button released
+                    # Fire with current power
+                    power = self.power_meter.get_power()
+                    self.player.throw_net(self.aim_angle, power)
+                    self.aiming = False
+                    self.mouse_down = False
+                    self.power_charging = False
 
     def update(self):
         """Update game state"""
         if self.game_over or self.victory:
             return
             
+        # Check if it's time to spawn initial debris (after 1 second)
+        if not self.initial_debris_spawned and not self.stage_paused and not self.repair_interface_active:
+            current_time = pygame.time.get_ticks()
+            elapsed = current_time - self.stage_start_time
+            
+            if elapsed >= 1000:  # 1000 milliseconds = 1 second
+                self.spawn_initial_debris()
+                self.initial_debris_spawned = True
+        
         # Update star background
         update_stars()
         
@@ -1362,6 +1386,13 @@ class Game:
         # Update player effects
         self.player.update()
         
+        # Update power meter - only increase when charging
+        if self.power_charging:
+            self.power_meter.increase()
+        
+        # Always update the glow effect
+        self.power_meter.update_glow()
+        
         # Update satellites
         for satellite in self.satellites:
             satellite.update()
@@ -1379,7 +1410,6 @@ class Game:
             dx = mouse_x - self.player.x
             dy = mouse_y - self.player.y
             self.aim_angle = math.atan2(dy, dx)
-            self.power_meter.update()  # Update oscillating power meter
             
         # Update net
         if self.player.net and self.player.net.active:
@@ -1410,7 +1440,6 @@ class Game:
                 if satellite.alive and debris.rect.colliderect(satellite.rect) and not debris.caught:
                     satellite.destroy()
                     debris_to_remove.append(debris)
-                    self.zel -= self.satellite_cost
                     # Add screen shake for impact
                     self.screen_shake = 10
                     
@@ -1458,15 +1487,51 @@ class Game:
         # Draw player with shake offset
         self.player.draw(screen)
         
+        # Draw power meter halo around the spaceship when aiming
+        if self.aiming:
+            power = self.power_meter.get_power()
+            
+            # Set halo color based on power (green to yellow to red)
+            if power < 0.3:
+                # Green to yellow
+                r = int(255 * (power / 0.3))
+                g = 255
+                b = 0
+            else:
+                # Yellow to red
+                r = 255
+                g = int(255 * (1 - ((power - 0.3) / 0.7)))
+                b = 0
+            
+            # Draw expanding halo based on power
+            max_halo_size = 120  # Maximum halo diameter
+            halo_size = 30 + int(power * max_halo_size)  # Scale with power
+            
+            halo_surf = pygame.Surface((halo_size, halo_size), pygame.SRCALPHA)
+            # Outer glow (more transparent)
+            pygame.draw.circle(halo_surf, (r, g, b, 30), (halo_size//2, halo_size//2), halo_size//2)
+            # Inner glow (more visible)
+            pygame.draw.circle(halo_surf, (r, g, b, 60), (halo_size//2, halo_size//2), halo_size//3)
+            
+            # Pulsing effect when power is maxed out
+            if power >= 0.99:  # If power is at maximum
+                pulse_intensity = 50 + int(30 * self.power_meter.glow_effect)
+                max_glow = pygame.Surface((halo_size + 20, halo_size + 20), pygame.SRCALPHA)
+                pygame.draw.circle(max_glow, (r, g, b, pulse_intensity), 
+                                 (max_glow.get_width()//2, max_glow.get_height()//2), 
+                                 (halo_size + 10)//2)
+                screen.blit(max_glow, (self.player.x - max_glow.get_width()//2, 
+                                      self.player.y - max_glow.get_height()//2))
+            
+            # Position the halo centered on the player
+            screen.blit(halo_surf, (self.player.x - halo_size//2, self.player.y - halo_size//2))
+        
         # Draw net with shake offset
         if self.player.net and self.player.net.active:
             self.player.net.draw(screen)
             
-        # Draw aiming line if aiming with integrated power meter
+        # Draw aiming line if aiming (original yellow style)
         if self.aiming:
-            # Get current power level
-            power = self.power_meter.power
-            
             # Calculate endpoints for segments
             segments = 8
             segment_length = TRAJECTORY_LENGTH / segments
@@ -1481,44 +1546,14 @@ class Game:
                 alpha = 255 - int(180 * (i / segments))
                 thickness = max(1, 3 - int(2 * (i / segments)))
                 
-                # Color based on power (green to yellow to red)
-                if power < 0.3:
-                    # Green to yellow
-                    r = int(255 * (power / 0.3))
-                    g = 255
-                    b = 0
-                else:
-                    # Yellow to red
-                    r = 255
-                    g = int(255 * (1 - ((power - 0.3) / 0.7)))
-                    b = 0
-                
-                color = (r, g, b, alpha)
-                
                 # Draw segment on temporary surface for alpha
                 temp_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-                pygame.draw.line(temp_surf, color, (start_x, start_y), (end_x, end_y), thickness)
+                pygame.draw.line(temp_surf, (255, 255, 0, alpha), (start_x, start_y), (end_x, end_y), thickness)
                 screen.blit(temp_surf, (0, 0))
                 
-                # Add small dots at segment joints with power-based color
+                # Add small dots at segment joints
                 if i < segments - 1:
-                    pygame.draw.circle(screen, (r, g, b), (int(end_x), int(end_y)), thickness//2)
-            
-            # Draw power indicator at the end of the trajectory
-            endpoint_x = self.player.x + math.cos(self.aim_angle) * TRAJECTORY_LENGTH * power
-            endpoint_y = self.player.y + math.sin(self.aim_angle) * TRAJECTORY_LENGTH * power
-            
-            # Pulsing effect for the power indicator
-            pulse_size = 5 + int(self.ui_pulse * 5)
-            pulse_alpha = int(150 + 105 * self.ui_pulse)
-            
-            # Create a glowing circle at the endpoint
-            glow_surf = pygame.Surface((pulse_size*4, pulse_size*4), pygame.SRCALPHA)
-            pygame.draw.circle(glow_surf, (r, g, b, pulse_alpha), (pulse_size*2, pulse_size*2), pulse_size)
-            screen.blit(glow_surf, (endpoint_x - pulse_size*2, endpoint_y - pulse_size*2))
-            
-            # Draw the main endpoint indicator
-            pygame.draw.circle(screen, (r, g, b), (int(endpoint_x), int(endpoint_y)), 4)
+                    pygame.draw.circle(screen, (255, 255, 0), (int(end_x), int(end_y)), thickness//2)
         
         # Draw UI with enhanced visuals
         # Health bar with glowing effect
@@ -1615,20 +1650,21 @@ class Game:
             button_width = 160  # Increased from 130
             button_height = 50
             
+            # Määritellään button_y_position ennen ehtoa
+            button_y_position = SCREEN_HEIGHT // 3 + 150
+
             if self.zel > 0 and missing_health > 0:
-                # Calculate repair potential
                 health_points_repairable = min(missing_health, self.zel // REPAIR_COST_PER_HEALTH)
-                
                 if health_points_repairable > 0:
-                    repair_text = f"Can repair {health_points_repairable}% using all ZEL"
-                    draw_text_with_shadow(screen, repair_text, self.font, WHITE, 
-                                         (SCREEN_WIDTH // 2 - self.font.size(repair_text)[0]//2, SCREEN_HEIGHT // 3 + 90))
-                
-                # Calculate spacing for two buttons
-                button_spacing = 30  # Space between buttons  
+                    repair_cost = health_points_repairable * REPAIR_COST_PER_HEALTH
+                    repair_text = f"Can repair {health_points_repairable}% for {repair_cost} ZEL"
+                    draw_text_with_shadow(screen, repair_text, self.small_font, WHITE, 
+                                        (SCREEN_WIDTH // 2 - self.small_font.size(repair_text)[0] // 2, 
+                                        SCREEN_HEIGHT // 3 + 110))
+                button_spacing = 30
                 total_width = (button_width * 2) + button_spacing
                 
-                # Draw repair button
+                # Piirretään "repair" -painike
                 self.repair_button_rect = pygame.Rect(
                     SCREEN_WIDTH // 2 - total_width // 2,
                     button_y_position,
@@ -1639,7 +1675,7 @@ class Game:
                 button_hover = self.repair_button_rect.collidepoint(mouse_pos)
                 draw_button(screen, self.repair_button_rect, "REPAIR", self.font, BLACK, GREEN, hover=button_hover)
                 
-                # Draw continue button to the right of repair
+                # Piirretään "continue" -painike oikealle
                 self.continue_button_rect = pygame.Rect(
                     SCREEN_WIDTH // 2 - total_width // 2 + button_width + button_spacing,
                     button_y_position,
@@ -1649,9 +1685,9 @@ class Game:
                 button_hover = self.continue_button_rect.collidepoint(mouse_pos)
                 draw_button(screen, self.continue_button_rect, "CONTINUE", self.font, BLACK, BLUE, hover=button_hover)
             else:
-                # Only draw centered continue button
+                # Piirretään keskitetty "continue" -painike
                 self.continue_button_rect = pygame.Rect(
-                    SCREEN_WIDTH // 2 - button_width // 2,  # Keep centered
+                    SCREEN_WIDTH // 2 - button_width // 2,
                     button_y_position,
                     button_width, 
                     button_height
