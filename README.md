@@ -7,4 +7,4 @@
 ## Space Debris
 - Code made with Claude 3.7
 - Music made with Suno v3.5
-- SFX made with https://sfxr.me/
+- SFX made with https://sfxr.me/ & https://sfbgames.itch.io/chiptone
