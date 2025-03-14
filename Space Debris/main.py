@@ -1286,7 +1286,7 @@ class Game:
             self.power_meter.deactivate()
         self.player.net = None
         
-        # Regenerate any destroyed satellites
+        # Always regenerate all satellites at the start of each new stage
         self.satellites = []
         self.spawn_satellites(5)
             
@@ -1324,7 +1324,7 @@ class Game:
                 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left mouse button
-                    if not self.aiming and (self.player.net is None or not self.player.net.active):
+                    if not self.aiming and self.player.net is None:  # Modified to only allow firing if no net is active
                         # Start aiming
                         self.aiming = True
                         self.power_meter.activate()
@@ -1462,8 +1462,11 @@ class Game:
         if self.player.net and self.player.net.active:
             self.player.net.draw(screen)
             
-        # Draw aiming line if aiming with enhanced visuals
+        # Draw aiming line if aiming with integrated power meter
         if self.aiming:
+            # Get current power level
+            power = self.power_meter.power
+            
             # Calculate endpoints for segments
             segments = 8
             segment_length = TRAJECTORY_LENGTH / segments
@@ -1478,17 +1481,44 @@ class Game:
                 alpha = 255 - int(180 * (i / segments))
                 thickness = max(1, 3 - int(2 * (i / segments)))
                 
+                # Color based on power (green to yellow to red)
+                if power < 0.3:
+                    # Green to yellow
+                    r = int(255 * (power / 0.3))
+                    g = 255
+                    b = 0
+                else:
+                    # Yellow to red
+                    r = 255
+                    g = int(255 * (1 - ((power - 0.3) / 0.7)))
+                    b = 0
+                
+                color = (r, g, b, alpha)
+                
                 # Draw segment on temporary surface for alpha
                 temp_surf = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-                pygame.draw.line(temp_surf, (255, 255, 0, alpha), (start_x, start_y), (end_x, end_y), thickness)
+                pygame.draw.line(temp_surf, color, (start_x, start_y), (end_x, end_y), thickness)
                 screen.blit(temp_surf, (0, 0))
                 
-                # Add small dots at segment joints
+                # Add small dots at segment joints with power-based color
                 if i < segments - 1:
-                    pygame.draw.circle(screen, (255, 255, 0), (int(end_x), int(end_y)), thickness//2)
+                    pygame.draw.circle(screen, (r, g, b), (int(end_x), int(end_y)), thickness//2)
             
-        # Draw power meter
-        self.power_meter.draw(screen)
+            # Draw power indicator at the end of the trajectory
+            endpoint_x = self.player.x + math.cos(self.aim_angle) * TRAJECTORY_LENGTH * power
+            endpoint_y = self.player.y + math.sin(self.aim_angle) * TRAJECTORY_LENGTH * power
+            
+            # Pulsing effect for the power indicator
+            pulse_size = 5 + int(self.ui_pulse * 5)
+            pulse_alpha = int(150 + 105 * self.ui_pulse)
+            
+            # Create a glowing circle at the endpoint
+            glow_surf = pygame.Surface((pulse_size*4, pulse_size*4), pygame.SRCALPHA)
+            pygame.draw.circle(glow_surf, (r, g, b, pulse_alpha), (pulse_size*2, pulse_size*2), pulse_size)
+            screen.blit(glow_surf, (endpoint_x - pulse_size*2, endpoint_y - pulse_size*2))
+            
+            # Draw the main endpoint indicator
+            pygame.draw.circle(screen, (r, g, b), (int(endpoint_x), int(endpoint_y)), 4)
         
         # Draw UI with enhanced visuals
         # Health bar with glowing effect
