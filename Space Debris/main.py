@@ -1178,7 +1178,7 @@ class Game:
         if current_time - self.last_spawn_time > self.spawn_delay:
             self.last_spawn_time = current_time
             # Arvotaan 30 % kohdistettua hyökkäystä ja 70 % suoraa lentoa
-            if random.random() < 0.3 and any(sat.alive for sat in self.satellites):
+            if random.random() < 0.2 and any(sat.alive for sat in self.satellites):
                 self.spawn_targeted_debris_to_satellite()
             else:
                 self.spawn_straight_debris()
