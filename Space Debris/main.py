@@ -1287,9 +1287,8 @@ class Game:
         self.player.net = None
         
         # Regenerate any destroyed satellites
-        if len([s for s in self.satellites if s.alive]) < 3:
-            self.satellites = []
-            self.spawn_satellites(5)
+        self.satellites = []
+        self.spawn_satellites(5)
             
         # Switch back to gameplay music
         self.switch_to_gameplay_music()
